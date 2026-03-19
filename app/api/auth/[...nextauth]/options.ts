@@ -9,6 +9,48 @@ import bcrypt from "bcryptjs";
 
 import { getDb } from "@/app/lib/mongodb";
 
+type OauthSyncPayload = {
+  email: string;
+  name: string | null;
+  image: string | null;
+  provider: string;
+  providerAccountId: string | undefined;
+  timestamp: Date;
+};
+
+async function syncOauthUser(payload: OauthSyncPayload) {
+  try {
+    const db = await getDb();
+    const users = db.collection("users");
+
+    await users.updateOne(
+      { email: payload.email },
+      {
+        $set: {
+          email: payload.email,
+          name: payload.name,
+          image: payload.image,
+          updatedAt: payload.timestamp,
+        },
+        $setOnInsert: { createdAt: payload.timestamp },
+        $addToSet: {
+          oauth: {
+            provider: payload.provider,
+            providerAccountId: payload.providerAccountId,
+          },
+        },
+      },
+      { upsert: true },
+    );
+  } catch {
+    // If Mongo is down, still allow OAuth sign-in.
+  }
+}
+
+function queueOauthUserSync(payload: OauthSyncPayload) {
+  void syncOauthUser(payload);
+}
+
 const providers: NextAuthOptions["providers"] = [];
 
 providers.push(
@@ -97,35 +139,16 @@ export const authOptions: NextAuthOptions = {
       if (!account || account.provider === "credentials") return true;
 
       const email = user.email?.toLowerCase() ?? null;
-      const now = new Date();
-
-      try {
-        const db = await getDb();
-        const users = db.collection("users");
-
-        if (email) {
-          await users.updateOne(
-            { email },
-            {
-              $set: {
-                email,
-                name: user.name ?? null,
-                image: user.image ?? null,
-                updatedAt: now,
-              },
-              $setOnInsert: { createdAt: now },
-              $addToSet: {
-                oauth: {
-                  provider: account.provider,
-                  providerAccountId: account.providerAccountId,
-                },
-              },
-            },
-            { upsert: true },
-          );
-        }
-      } catch {
-        // If Mongo is down, still allow OAuth sign-in.
+      if (email) {
+        const payload = {
+          email,
+          name: user.name ?? null,
+          image: user.image ?? null,
+          provider: account.provider,
+          providerAccountId: account.providerAccountId,
+          timestamp: new Date(),
+        };
+        void queueOauthUserSync(payload);
       }
 
       return true;
