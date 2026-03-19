@@ -1,0 +1,79 @@
+@import "tailwindcss";
+
+:root {
+  --background: #0b0206;
+  --foreground: #ffffff;
+  --primary: #ff2c55;
+  --secondary: #ff0055;
+  --font-sans: "Poppins", "Inter", "Segoe UI", system-ui, sans-serif;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  background: var(--background);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  min-height: 100dvh;
+  position: relative;
+  -webkit-overflow-scrolling: touch;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: var(--background);
+  z-index: -1;
+}
+
+::selection {
+  background: rgba(255, 44, 85, 0.35);
+  color: #ffffff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+.scroll-section-dots,
+.scroll-progress-bar {
+  transition:
+    opacity 220ms ease,
+    transform 220ms ease;
+  will-change: opacity, transform;
+}
+
+html[data-mobile-nav-open="true"] .scroll-section-dots,
+html[data-mobile-nav-open="true"] .scroll-progress-bar,
+body[data-mobile-nav-open="true"] .scroll-section-dots,
+body[data-mobile-nav-open="true"] .scroll-progress-bar,
+body[data-mobile-nav-open="true"] [aria-label="Scroll progress"] {
+  opacity: 0;
+  transform: translateX(-10px);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scroll-section-dots,
+  .scroll-progress-bar {
+    transition: none;
+  }
+}

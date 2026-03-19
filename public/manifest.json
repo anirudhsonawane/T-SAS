@@ -1,0 +1,28 @@
+{
+  "name": "QUICKETS | Event Ticket Marketplace",
+  "short_name": "QUICKETS",
+  "description": "Cinematic concert ticket marketplace landing page.",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#ff3b3b",
+  "background_color": "#0b0206",
+  "icons": [
+    {
+      "src": "/apple-logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/apple-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "serviceworker": {
+    "src": "/service-worker.js",
+    "scope": "/",
+    "type": "classic"
+  }
+}
