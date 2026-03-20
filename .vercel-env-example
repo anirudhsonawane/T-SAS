@@ -1,4 +1,0 @@
-# Suppress DEP0169 deprecation warning from url.parse() in transitive dependencies
-# This warning comes from @next-auth, razorpay, and their dependencies
-# Set in Vercel Environment Variables
-NODE_OPTIONS=--no-deprecation

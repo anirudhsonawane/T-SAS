@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Analytics } from "@vercel/analytics/react";
 import SitePreloader from "./components/site-preloader";
 import { ScrollToTopButton } from "./components/ScrollToTopButton";
 import { Providers } from "./providers";
@@ -26,6 +27,7 @@ export default function RootLayout({
           <ScrollToTopButton />
           {children}
         </Providers>
+        <Analytics />
       </body>
     </html>
   );
