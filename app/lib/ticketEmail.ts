@@ -511,109 +511,19 @@ export async function sendTicketEmail(payload: TicketEmailPayload) {
     return { ok: true as const, messageId: typeof info?.messageId === "string" ? info.messageId : undefined };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
-    const errorStack = err instanceof Error ? err.stack : "";
+    const errorStack = err instanceof Error ? err.stack || "" : "";
     console.error("[TicketEmail] Failed to send email", {
       to: payload.to,
       ticketId: payload.ticketId,
       message,
-      errorStack: errorStack.split("\n").slice(0, 5).join("\n"),
+      errorStack: (errorStack || "").split("\n").slice(0, 5).join("\n"),
       error: err,
     });
     return { ok: false as const, reason: message };
   }
 }
 
-  const textLines = [
-    `Ticket Confirmation`,
-    ``,
-    `Hello ${displayName},`,
-    ``,
-    `Event: ${payload.eventName}`,
-    `Date: ${displayEventDate}`,
-    `Time: ${displayEventTime}`,
-    `Venue: ${displayVenue}`,
-    `Ticket Type: ${payload.ticketType}`,
-    ...(displaySeat ? [`Seat: ${displaySeat}`] : []),
-    `Ticket ID: ${payload.ticketId}`,
-    ticketUrl ? `` : ``,
-    ticketUrl ? `View your ticket: ${ticketUrl}` : ``,
-  ].filter(Boolean);
 
-  const qrPng = payload.qrCodeDataUrl ? parseDataUrlPng(payload.qrCodeDataUrl) : null;
-  const pdfBuffer = await createTicketPdfBuffer(payload);
-
-  const qrSrc = payload.qrCodeDataUrl?.trim() || "";
-
-  const html = `
-    <div style="font-family:Arial, sans-serif; max-width:600px; margin:auto; padding:20px; background:#f5f6f8; border-radius:10px">
-      <h2 style="color:#111">🎟 Ticket Confirmation</h2>
-
-      <p>Hello <b>${escapeHtml(displayName)}</b>,</p>
-
-      <p>Your ticket purchase was successful. We're excited to see you at the event!</p>
-
-      <hr style="border:none; border-top:1px solid #ddd">
-
-      <h3 style="margin-bottom:5px">${escapeHtml(payload.eventName)}</h3>
-
-      <p>
-        📅 <b>Date:</b> ${escapeHtml(displayEventDate)} <br>
-        ⏰ <b>Time:</b> ${escapeHtml(displayEventTime)} <br>
-        📍 <b>Venue:</b> ${escapeHtml(displayVenue)}
-      </p>
-
-      <p>
-        🎫 <b>Ticket Type:</b> ${escapeHtml(payload.ticketType)} <br>
-        ${displaySeat ? `💺 <b>Seat:</b> ${escapeHtml(displaySeat)}` : ""}
-      </p>
-
-      <div style="text-align:center; margin:20px 0">
-        <p><b>Your QR Ticket</b></p>
-        ${
-          qrSrc
-            ? `<img src="${qrSrc}" width="160" alt="Ticket QR Code" />`
-            : `<p style="font-size:14px; color:#666">QR code is attached as a PDF ticket.</p>`
-        }
-      </div>
-
-      <p>Please present this QR code at the venue entrance for quick check-in.</p>
-
-      <hr style="border:none; border-top:1px solid #ddd">
-
-      <p style="font-size:14px; color:#666">
-        If you have any questions, feel free to contact our support team.
-      </p>
-
-      <p style="font-size:14px; color:#999">
-        See you there! 🎶 <br>
-        Team Ticket-r
-      </p>
-
-      ${
-        ticketUrl
-          ? `<p style="margin-top:18px"><a href="${ticketUrl}" style="display:inline-block;background:#111;color:#fff;padding:10px 14px;border-radius:999px;text-decoration:none;font-weight:700;font-size:12px;letter-spacing:.12em;text-transform:uppercase">View Ticket</a></p>`
-          : ""
-      }
-    </div>
-  `;
-
-  const info = await transporter.sendMail({
-    from: smtp.from,
-    to: payload.to,
-    subject,
-    text: textLines.join("\n"),
-    html,
-    attachments: [
-      {
-        filename: `ticket-${payload.ticketId}.pdf`,
-        content: pdfBuffer,
-        contentType: "application/pdf",
-      },
-    ],
-  });
-
-  return { ok: true as const, messageId: typeof info?.messageId === "string" ? info.messageId : undefined };
-}
 
 function escapeHtml(value: string) {
   return value
@@ -622,4 +532,4 @@ function escapeHtml(value: string) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
-}
+  }
