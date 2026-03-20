@@ -202,8 +202,7 @@ async function createTicketPdfBuffer(payload: TicketEmailPayload) {
   const cardX = Math.floor((width - cardW) / 2);
   const cardY = Math.floor((height - cardH) / 2);
 
-  // Shadow
-  drawRoundedRect({ x: cardX + 10, y: cardY - 10, w: cardW, h: cardH, r: 36, fill: rgb(0, 0, 0), opacity: 0.35 });
+  // No shadow for a clean card look
   // Card
   drawRoundedBorder({ x: cardX, y: cardY, w: cardW, h: cardH, r: 36, borderWidth: 1, border: rgb(0, 0, 0), fill: white, opacity: 0.06 });
   drawRoundedRect({ x: cardX + 1, y: cardY + 1, w: cardW - 2, h: cardH - 2, r: 35, fill: white });
@@ -327,19 +326,21 @@ async function createTicketPdfBuffer(payload: TicketEmailPayload) {
     color: slate800,
   });
 
-  // Expanded QR section
+  // Expanded QR section (uplifted QR code)
   const minQrSectionY = cardY + pad + 10;
   const maxQrSectionTop = buttonWrapY - 14;
   const desiredQrSectionH = 292;
   const qrSectionH = Math.max(250, Math.min(desiredQrSectionH, maxQrSectionTop - minQrSectionY));
-  const qrSectionY = maxQrSectionTop - qrSectionH;
+  // Move the QR section up by 32px for better balance
+  const uplift = 32;
+  const qrSectionY = maxQrSectionTop - qrSectionH + uplift;
   drawRoundedBorder({ x: innerX, y: qrSectionY, w: innerW, h: qrSectionH, r: 24, borderWidth: 1, border: slate200, fill: white });
 
   // QR image box
   const qrBoxW = 180;
   const qrBoxH = 180;
   const qrBoxX = innerX + Math.floor((innerW - qrBoxW) / 2);
-  const qrBoxY = qrSectionY + qrSectionH - qrBoxH - 64;
+  const qrBoxY = qrSectionY + qrSectionH - qrBoxH - 64 + uplift;
   drawRoundedBorder({ x: qrBoxX, y: qrBoxY, w: qrBoxW, h: qrBoxH, r: 16, borderWidth: 1, border: slate200, fill: white });
 
   const qrPng = payload.qrCodeDataUrl ? parseDataUrlPng(payload.qrCodeDataUrl) : null;
