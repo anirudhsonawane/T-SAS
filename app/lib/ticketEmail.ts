@@ -1,5 +1,5 @@
 import nodemailer from "nodemailer";
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { PDFDocument, StandardFonts, rgb, PDFPage } from "pdf-lib";
 import path from "node:path";
 import { readFile } from "node:fs/promises";
 
@@ -78,6 +78,98 @@ function parseDataUrlPng(dataUrl: string) {
   return Buffer.from(b64, "base64");
 }
 
+
+
+// Helper function types
+interface RoundedRectArgs {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  r: number;
+  fill: ReturnType<typeof rgb>;
+  opacity?: number;
+}
+interface RoundedBorderArgs extends RoundedRectArgs {
+  borderWidth: number;
+  border: ReturnType<typeof rgb>;
+}
+
+function drawRoundedRect(page: PDFPage, args: RoundedRectArgs) {
+  const { x, y, w, h, r, fill, opacity } = args;
+  const clampedR = Math.max(0, Math.min(r, Math.min(w, h) / 2));
+  page.drawRectangle({ x: x + clampedR, y, width: w - clampedR * 2, height: h, color: fill, opacity });
+  page.drawRectangle({ x, y: y + clampedR, width: w, height: h - clampedR * 2, color: fill, opacity });
+  page.drawCircle({ x: x + clampedR, y: y + clampedR, size: clampedR, color: fill, opacity });
+  page.drawCircle({ x: x + w - clampedR, y: y + clampedR, size: clampedR, color: fill, opacity });
+  page.drawCircle({ x: x + clampedR, y: y + h - clampedR, size: clampedR, color: fill, opacity });
+  page.drawCircle({ x: x + w - clampedR, y: y + h - clampedR, size: clampedR, color: fill, opacity });
+}
+
+function drawRoundedBorder(page: PDFPage, args: RoundedBorderArgs) {
+  const { x, y, w, h, r, borderWidth, border, fill, opacity } = args;
+  drawRoundedRect(page, { x, y, w, h, r, fill: border, opacity });
+  drawRoundedRect(page, {
+    x: x + borderWidth,
+    y: y + borderWidth,
+    w: w - borderWidth * 2,
+    h: h - borderWidth * 2,
+    r: Math.max(0, r - borderWidth),
+    fill,
+    opacity,
+  });
+}
+
+function textWidth(fontRegular: any, fontBold: any, text: string, size: number, bold = false) {
+  const font = bold ? fontBold : fontRegular;
+  return font.widthOfTextAtSize(text, size);
+}
+
+function wrapLines(fontRegular: any, fontBold: any, text: string, maxWidth: number, size: number, bold = false, maxLines = 2) {
+  const font = bold ? fontBold : fontRegular;
+  const words = text.replaceAll(/\s+/g, " ").trim().split(" ").filter(Boolean);
+  const lines: string[] = [];
+  let current = "";
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (font.widthOfTextAtSize(candidate, size) <= maxWidth) {
+      current = candidate;
+      continue;
+    }
+    if (current) lines.push(current);
+    current = word;
+    if (lines.length >= maxLines - 1) break;
+  }
+  if (lines.length < maxLines && current) lines.push(current);
+  const usedWords = lines.join(" ").split(" ").filter(Boolean).length;
+  const hasOverflow = usedWords < words.length;
+  if (hasOverflow && lines.length) {
+    const lastIndex = lines.length - 1;
+    let clipped = lines[lastIndex];
+    while (clipped.length > 3 && font.widthOfTextAtSize(`${clipped}…`, size) > maxWidth) {
+      clipped = clipped.slice(0, -1);
+    }
+    lines[lastIndex] = `${clipped}…`;
+  }
+  return lines;
+}
+
+function drawDottedDivider(page: PDFPage, x: number, y: number, w: number, slate200: ReturnType<typeof rgb>) {
+  const dot = 2;
+  const gap = 6;
+  const count = Math.floor(w / (dot + gap));
+  for (let i = 0; i < count; i += 1) {
+    page.drawRectangle({
+      x: x + i * (dot + gap),
+      y,
+      width: dot,
+      height: 1,
+      color: slate200,
+      opacity: 1,
+    });
+  }
+}
+
 async function createTicketPdfBuffer(payload: TicketEmailPayload) {
   const pdf = await PDFDocument.create();
   pdf.setTitle(`Ticket - ${payload.eventName}`);
@@ -85,6 +177,12 @@ async function createTicketPdfBuffer(payload: TicketEmailPayload) {
 
   const page = pdf.addPage([595.28, 841.89]); // A4 in points
   const { width, height } = page.getSize();
+
+  // Define card dimensions and position (centered on page)
+  const cardW = 420;
+  const cardH = 700;
+  const cardX = Math.floor((width - cardW) / 2);
+  const cardY = Math.floor((height - cardH) / 2);
 
   const fontRegular = await pdf.embedFont(StandardFonts.Helvetica);
   const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
@@ -97,66 +195,6 @@ async function createTicketPdfBuffer(payload: TicketEmailPayload) {
   const slate100 = rgb(0.949, 0.957, 0.969); // #f1f5f9
   const white = rgb(1, 1, 1);
 
-  function drawRoundedRect(args: {
-    x: number;
-    y: number;
-    w: number;
-    h: number;
-    r: number;
-    fill: ReturnType<typeof rgb>;
-    opacity?: number;
-  }) {
-    const { x, y, w, h, r, fill, opacity } = args;
-    const clampedR = Math.max(0, Math.min(r, Math.min(w, h) / 2));
-    page.drawRectangle({ x: x + clampedR, y, width: w - clampedR * 2, height: h, color: fill, opacity });
-    page.drawRectangle({ x, y: y + clampedR, width: w, height: h - clampedR * 2, color: fill, opacity });
-    page.drawCircle({ x: x + clampedR, y: y + clampedR, size: clampedR, color: fill, opacity });
-    page.drawCircle({ x: x + w - clampedR, y: y + clampedR, size: clampedR, color: fill, opacity });
-    page.drawCircle({ x: x + clampedR, y: y + h - clampedR, size: clampedR, color: fill, opacity });
-    page.drawCircle({ x: x + w - clampedR, y: y + h - clampedR, size: clampedR, color: fill, opacity });
-  }
-
-  function drawRoundedBorder(args: {
-    x: number;
-    y: number;
-    w: number;
-    h: number;
-    r: number;
-    borderWidth: number;
-    border: ReturnType<typeof rgb>;
-    fill: ReturnType<typeof rgb>;
-    opacity?: number;
-  }) {
-    const { x, y, w, h, r, borderWidth, border, fill, opacity } = args;
-    drawRoundedRect({ x, y, w, h, r, fill: border, opacity });
-    drawRoundedRect({
-      x: x + borderWidth,
-      y: y + borderWidth,
-      w: w - borderWidth * 2,
-      h: h - borderWidth * 2,
-      r: Math.max(0, r - borderWidth),
-      fill,
-      opacity,
-    });
-  }
-
-  function textWidth(text: string, size: number, bold = false) {
-    const font = bold ? fontBold : fontRegular;
-    return font.widthOfTextAtSize(text, size);
-  }
-
-  function wrapLines(text: string, maxWidth: number, size: number, bold = false, maxLines = 2) {
-    const font = bold ? fontBold : fontRegular;
-    const words = text.replaceAll(/\s+/g, " ").trim().split(" ").filter(Boolean);
-    const lines: string[] = [];
-    let current = "";
-
-    for (const word of words) {
-      const candidate = current ? `${current} ${word}` : word;
-      if (font.widthOfTextAtSize(candidate, size) <= maxWidth) {
-        current = candidate;
-        // Removed SHOW TICKET [QR CODE LOGO] CODE bar
-
   const pad = 18;
   const innerX = cardX + pad;
   const innerY = cardY + pad;
@@ -167,7 +205,7 @@ async function createTicketPdfBuffer(payload: TicketEmailPayload) {
   const imageFrameR = 28;
   const imageFrameH = 220;
   const imageFrameY = cardY + cardH - pad - imageFrameH;
-  drawRoundedBorder({
+  drawRoundedBorder(page, {
     x: innerX,
     y: imageFrameY,
     w: innerW,
@@ -178,13 +216,13 @@ async function createTicketPdfBuffer(payload: TicketEmailPayload) {
     fill: slate100,
     opacity: 0.05,
   });
-  drawRoundedRect({ x: innerX + 1, y: imageFrameY + 1, w: innerW - 2, h: imageFrameH - 2, r: imageFrameR - 1, fill: slate100 });
+  drawRoundedRect(page, { x: innerX + 1, y: imageFrameY + 1, w: innerW - 2, h: imageFrameH - 2, r: imageFrameR - 1, fill: slate100 });
 
   // Embed image (fallback to bg-image.png)
-  try {
-    const imgPath = path.join(process.cwd(), "public", "bg-image.png");
-    const imgBytes = await readFile(imgPath);
-    const embedded = await pdf.embedPng(imgBytes);
+  let imgPath = path.join(process.cwd(), "public", "bg-image.png");
+  let imgBytes = await readFile(imgPath).catch(() => null);
+  let embedded = imgBytes ? await pdf.embedPng(imgBytes).catch(() => null) : null;
+  if (embedded) {
     const targetW = innerW - 2;
     const targetH = imageFrameH - 2;
     const scale = Math.max(targetW / embedded.width, targetH / embedded.height);
@@ -193,8 +231,6 @@ async function createTicketPdfBuffer(payload: TicketEmailPayload) {
     const drawX = innerX + 1 + Math.floor((targetW - drawW) / 2);
     const drawY = imageFrameY + 1 + Math.floor((targetH - drawH) / 2);
     page.drawImage(embedded, { x: drawX, y: drawY, width: drawW, height: drawH });
-  } catch {
-    // If image can't be read, keep the placeholder frame.
   }
 
   // Title + meta
@@ -204,13 +240,13 @@ async function createTicketPdfBuffer(payload: TicketEmailPayload) {
   const time = payload.eventTime?.trim() || "TBA";
 
   let metaY = imageFrameY - 18;
-  const titleLines = wrapLines(title, innerW - 4, 16, true, 2);
+  const titleLines = wrapLines(fontRegular, fontBold, title, innerW - 4, 16, true, 2);
   for (const line of titleLines) {
     page.drawText(line, { x: innerX + 2, y: metaY, size: 16, font: fontBold, color: slate900, maxWidth: innerW - 4 });
     metaY -= 18;
   }
 
-  const locationLine = wrapLines(location, innerW - 4, 10, true, 1)[0];
+  const locationLine = wrapLines(fontRegular, fontBold, location, innerW - 4, 10, true, 1)[0];
   if (locationLine) {
     page.drawText(locationLine, { x: innerX + 2, y: metaY, size: 10, font: fontBold, color: slate500, maxWidth: innerW - 4 });
     metaY -= 16;
@@ -222,18 +258,18 @@ async function createTicketPdfBuffer(payload: TicketEmailPayload) {
 
   // Divider (dashed)
   const dividerY = Math.max(metaY - 10, cardY + pad + 360);
-  drawDottedDivider(innerX, dividerY, innerW);
+  drawDottedDivider(page, innerX, dividerY, innerW, slate200);
 
   // Button row container
   const buttonWrapY = dividerY - 56;
-  drawRoundedBorder({ x: innerX, y: buttonWrapY, w: innerW, h: 44, r: 18, borderWidth: 1, border: slate200, fill: slate100 });
+  drawRoundedBorder(page, { x: innerX, y: buttonWrapY, w: innerW, h: 44, r: 18, borderWidth: 1, border: slate200, fill: slate100 });
 
   // Button inside
   const buttonX = innerX + 10;
   const buttonY = buttonWrapY + 8;
   const buttonW = innerW - 20;
   const buttonH = 28;
-  drawRoundedBorder({ x: buttonX, y: buttonY, w: buttonW, h: buttonH, r: 12, borderWidth: 1, border: slate200, fill: white });
+  drawRoundedBorder(page, { x: buttonX, y: buttonY, w: buttonW, h: buttonH, r: 12, borderWidth: 1, border: slate200, fill: white });
 
   // Button text: SHOW TICKET [QR ICON] CODE
   const labelLeft = "SHOW TICKET";
@@ -241,14 +277,14 @@ async function createTicketPdfBuffer(payload: TicketEmailPayload) {
   const labelSize = 9;
   const gap = 10;
   const iconSize = 12;
-  const totalW = textWidth(labelLeft, labelSize, true) + gap + iconSize + gap + textWidth(labelRight, labelSize, true);
+  const totalW = textWidth(fontRegular, fontBold, labelLeft, labelSize, true) + gap + iconSize + gap + textWidth(fontRegular, fontBold, labelRight, labelSize, true);
   const startX = buttonX + Math.floor((buttonW - totalW) / 2);
   const textY = buttonY + 10;
 
   page.drawText(labelLeft, { x: startX, y: textY, size: labelSize, font: fontBold, color: slate800 });
 
   // Draw a simple QR code icon (3x3 grid, some filled)
-  const iconX = startX + textWidth(labelLeft, labelSize, true) + gap;
+  const iconX = startX + textWidth(fontRegular, fontBold, labelLeft, labelSize, true) + gap;
   const iconY = buttonY + 8;
   const qrBlock = 2.2;
   const qrPad = 1.2;
@@ -284,18 +320,18 @@ async function createTicketPdfBuffer(payload: TicketEmailPayload) {
   // Move the QR section up by 32px for better balance
   const uplift = 32;
   const qrSectionY = maxQrSectionTop - qrSectionH + uplift;
-  drawRoundedBorder({ x: innerX, y: qrSectionY, w: innerW, h: qrSectionH, r: 24, borderWidth: 1, border: slate200, fill: white });
+  drawRoundedBorder(page, { x: innerX, y: qrSectionY, w: innerW, h: qrSectionH, r: 24, borderWidth: 1, border: slate200, fill: white });
 
   // QR image box
   const qrBoxW = 180;
   const qrBoxH = 180;
   const qrBoxX = innerX + Math.floor((innerW - qrBoxW) / 2);
   const qrBoxY = qrSectionY + qrSectionH - qrBoxH - 64 + uplift;
-  drawRoundedBorder({ x: qrBoxX, y: qrBoxY, w: qrBoxW, h: qrBoxH, r: 16, borderWidth: 1, border: slate200, fill: white });
+  drawRoundedBorder(page, { x: qrBoxX, y: qrBoxY, w: qrBoxW, h: qrBoxH, r: 16, borderWidth: 1, border: slate200, fill: white });
 
   const qrPng = payload.qrCodeDataUrl ? parseDataUrlPng(payload.qrCodeDataUrl) : null;
-  if (qrPng) {
-    const embeddedQr = await pdf.embedPng(qrPng);
+  let embeddedQr = qrPng ? await pdf.embedPng(qrPng).catch(() => null) : null;
+  if (embeddedQr) {
     const qrPad = 14;
     const target = qrBoxW - qrPad * 2;
     page.drawImage(embeddedQr, {
@@ -309,10 +345,10 @@ async function createTicketPdfBuffer(payload: TicketEmailPayload) {
   // Ticket ID line
   const ticketIdLabel = `Ticket ID: ${payload.ticketId}`;
   const idSize = 9;
-  const idLines = wrapLines(ticketIdLabel, innerW - 24, idSize, false, 2);
+  const idLines = wrapLines(fontRegular, fontBold, ticketIdLabel, innerW - 24, idSize, false, 2);
   let idY = qrBoxY - 18;
   for (const line of idLines) {
-    const idW = textWidth(line, idSize, false);
+    const idW = textWidth(fontRegular, fontBold, line, idSize, false);
     page.drawText(line, { x: innerX + Math.floor((innerW - idW) / 2), y: idY, size: idSize, font: fontRegular, color: slate600 });
     idY -= 12;
   }
@@ -324,18 +360,18 @@ async function createTicketPdfBuffer(payload: TicketEmailPayload) {
   const pillH = 46;
 
   // TYPE
-  drawRoundedBorder({ x: innerX, y: pillY, w: pillW, h: pillH, r: 18, borderWidth: 1, border: slate200, fill: slate100 });
+  drawRoundedBorder(page, { x: innerX, y: pillY, w: pillW, h: pillH, r: 18, borderWidth: 1, border: slate200, fill: slate100 });
   page.drawText("TYPE", { x: innerX + 14, y: pillY + 28, size: 9, font: fontBold, color: slate500 });
-  const typeLine = wrapLines(payload.ticketType, pillW - 22, 11, true, 1)[0] || payload.ticketType;
+  const typeLine = wrapLines(fontRegular, fontBold, payload.ticketType, pillW - 22, 11, true, 1)[0] || payload.ticketType;
   page.drawText(typeLine, { x: innerX + 14, y: pillY + 12, size: 11, font: fontBold, color: slate800, maxWidth: pillW - 22 });
 
   // QTY
   const qtyX = innerX + pillW + pillGap;
-  drawRoundedBorder({ x: qtyX, y: pillY, w: pillW, h: pillH, r: 18, borderWidth: 1, border: slate200, fill: slate100 });
+  drawRoundedBorder(page, { x: qtyX, y: pillY, w: pillW, h: pillH, r: 18, borderWidth: 1, border: slate200, fill: slate100 });
   const qtyLabel = "QTY";
-  page.drawText(qtyLabel, { x: qtyX + pillW - 14 - textWidth(qtyLabel, 9, true), y: pillY + 28, size: 9, font: fontBold, color: slate500 });
+  page.drawText(qtyLabel, { x: qtyX + pillW - 14 - textWidth(fontRegular, fontBold, qtyLabel, 9, true), y: pillY + 28, size: 9, font: fontBold, color: slate500 });
   const qtyValue = String(payload.quantity);
-  page.drawText(qtyValue, { x: qtyX + pillW - 14 - textWidth(qtyValue, 11, true), y: pillY + 12, size: 11, font: fontBold, color: slate800 });
+  page.drawText(qtyValue, { x: qtyX + pillW - 14 - textWidth(fontRegular, fontBold, qtyValue, 11, true), y: pillY + 12, size: 11, font: fontBold, color: slate800 });
 
   const bytes = await pdf.save();
   return Buffer.from(bytes);
