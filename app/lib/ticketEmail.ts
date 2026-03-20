@@ -194,8 +194,7 @@ async function createTicketPdfBuffer(payload: TicketEmailPayload) {
     }
   }
 
-  // Background
-  page.drawRectangle({ x: 0, y: 0, width, height, color: rgb(0.03, 0.03, 0.04) });
+  // No outer background, keep PDF white
 
   // Ticket card (match TicketPassCard UI)
   const cardW = 390;
@@ -287,30 +286,41 @@ async function createTicketPdfBuffer(payload: TicketEmailPayload) {
   const buttonH = 28;
   drawRoundedBorder({ x: buttonX, y: buttonY, w: buttonW, h: buttonH, r: 12, borderWidth: 1, border: slate200, fill: white });
 
-  // Button text: SHOW TICKET [icon] CODE
+  // Button text: SHOW TICKET [QR ICON] CODE
   const labelLeft = "SHOW TICKET";
   const labelRight = "CODE";
   const labelSize = 9;
   const gap = 10;
-  const iconSize = 10;
+  const iconSize = 12;
   const totalW = textWidth(labelLeft, labelSize, true) + gap + iconSize + gap + textWidth(labelRight, labelSize, true);
   const startX = buttonX + Math.floor((buttonW - totalW) / 2);
   const textY = buttonY + 10;
 
   page.drawText(labelLeft, { x: startX, y: textY, size: labelSize, font: fontBold, color: slate800 });
 
-  // Simple QR icon (3 squares)
+  // Draw a simple QR code icon (3x3 grid, some filled)
   const iconX = startX + textWidth(labelLeft, labelSize, true) + gap;
-  const iconY = buttonY + 9;
-  const drawSquare = (x: number, y: number, size: number) => {
-    page.drawRectangle({ x, y, width: size, height: size, borderColor: slate500, borderWidth: 1, color: white });
-    page.drawRectangle({ x: x + 0.7, y: y + 0.7, width: size - 1.4, height: size - 1.4, borderColor: slate500, borderWidth: 1, color: white });
-  };
-  drawSquare(iconX, iconY, 8);
-  drawSquare(iconX + 10, iconY, 8);
-  drawSquare(iconX, iconY - 10, 8);
+  const iconY = buttonY + 8;
+  const qrBlock = 2.2;
+  const qrPad = 1.2;
+  const qrColor = slate500;
+  // 3x3 grid, fill some blocks for QR look
+  for (let row = 0; row < 3; row++) {
+    for (let col = 0; col < 3; col++) {
+      // Fill corners and center for a QR-like look
+      if ((row === 0 && col === 0) || (row === 0 && col === 2) || (row === 2 && col === 0) || (row === 2 && col === 2) || (row === 1 && col === 1)) {
+        page.drawRectangle({
+          x: iconX + col * (qrBlock + qrPad),
+          y: iconY + (2 - row) * (qrBlock + qrPad),
+          width: qrBlock,
+          height: qrBlock,
+          color: qrColor,
+        });
+      }
+    }
+  }
   page.drawText(labelRight, {
-    x: iconX + iconSize + gap,
+    x: iconX + iconSize + gap - 2,
     y: textY,
     size: labelSize,
     font: fontBold,
@@ -356,7 +366,7 @@ async function createTicketPdfBuffer(payload: TicketEmailPayload) {
     idY -= 12;
   }
 
-  // Bottom pills: Type / Qty
+  // Bottom pills: Type / Qty (no artifact between)
   const pillY = qrSectionY + 14;
   const pillGap = 10;
   const pillW = Math.floor((innerW - pillGap) / 2);
@@ -459,15 +469,10 @@ export async function sendTicketEmail(payload: TicketEmailPayload) {
         </p>
 
         <div style="text-align:center; margin:20px 0">
-          <p><b>Your QR Ticket</b></p>
-          ${
-            qrSrc
-              ? `<img src="${qrSrc}" width="160" alt="Ticket QR Code" />`
-              : `<p style="font-size:14px; color:#666">QR code is attached as a PDF ticket.</p>`
-          }
+          <p><b>Please Find Your Digital Ticket and QR code of the ticket is attached below.</b></p>
         </div>
 
-        <p>Please present this QR code at the venue entrance for quick check-in.</p>
+        <p>Please present the attached QR code PDF at the venue entrance for quick check-in.</p>
 
         <hr style="border:none; border-top:1px solid #ddd">
 
