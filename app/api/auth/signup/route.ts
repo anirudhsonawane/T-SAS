@@ -34,6 +34,9 @@ export async function POST(req: Request) {
     if (!password || password.length < 8) {
       return NextResponse.json({ ok: false, error: "Password must be at least 8 characters." }, { status: 400 });
     }
+    if (!name) {
+      return NextResponse.json({ ok: false, error: "Name is required." }, { status: 400 });
+    }
     if (!mobile) {
       return NextResponse.json({ ok: false, error: "Mobile number is required." }, { status: 400 });
     }
@@ -52,9 +55,9 @@ export async function POST(req: Request) {
     const passwordHash = await bcrypt.hash(password, getSaltRounds());
     const now = new Date();
 
-    await users.insertOne({
+    const insertResult = await users.insertOne({
       email,
-      name: name || null,
+      name: name,
       image: null,
       mobile: mobile.replace(/\s+/g, ""),
       passwordHash,
@@ -62,9 +65,17 @@ export async function POST(req: Request) {
       updatedAt: now,
     });
 
+    if (!insertResult.insertedId) {
+      console.error("[Signup] Failed to insert user: insertedId is missing", { email });
+      return NextResponse.json({ ok: false, error: "Failed to create user." }, { status: 500 });
+    }
+
+    console.log("[Signup] User created successfully", { email, userId: insertResult.insertedId });
     return NextResponse.json({ ok: true }, { status: 201 });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Signup failed.";
+    const errorStack = err instanceof Error ? err.stack : "";
+    console.error("[Signup] Error during user registration:", { message, errorStack, error: err });
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
 }

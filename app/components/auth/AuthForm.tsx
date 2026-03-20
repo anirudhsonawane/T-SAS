@@ -246,6 +246,7 @@ export function AuthForm({
   const [providers, setProviders] = useState<Providers | null>(null);
   const [providersError, setProvidersError] = useState<string | null>(null);
   const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
   const [mobile, setMobile] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -370,6 +371,11 @@ export function AuthForm({
                 return;
               }
 	              if (mode === "signup") {
+	                const normalizedName = name.trim();
+	                if (!normalizedName) {
+	                  setFormMessage("Please enter your name.");
+	                  return;
+	                }
 	                const normalizedMobile = mobile.replace(/\s+/g, "");
 	                if (!normalizedMobile) {
 	                  setFormMessage("Please enter your mobile number.");
@@ -392,11 +398,12 @@ export function AuthForm({
 	              setIsSubmitting(true);
 	              try {
 	                const normalizedMobile = mobile.replace(/\s+/g, "");
+	                const normalizedName = name.trim();
 	                if (mode === "signup") {
 	                  const res = await fetch("/api/auth/signup", {
 	                    method: "POST",
 	                    headers: { "Content-Type": "application/json" },
-	                    body: JSON.stringify({ email: normalizedEmail, mobile: normalizedMobile, password }),
+	                    body: JSON.stringify({ email: normalizedEmail, name: normalizedName, mobile: normalizedMobile, password }),
 	                  });
 	                  const data = (await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
 	                  if (!res.ok || !data?.ok) {
@@ -445,19 +452,49 @@ export function AuthForm({
             </label>
 
             {mode === "signup" ? (
-              <label className="relative block">
-                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/55">
-                  <PhoneIcon />
-                </span>
-                <input
-                  value={mobile}
-                  onChange={(event) => setMobile(event.target.value)}
-                  placeholder="Mobile"
-                  inputMode="tel"
-                  autoComplete="tel"
-                  className="h-11 w-full rounded-2xl border border-white/20 bg-white/10 pl-10 pr-4 text-sm text-white/90 shadow-[0_8px_22px_rgba(0,0,0,0.25)] outline-none transition placeholder:text-white/45 focus:border-white/35 focus:bg-white/15"
-                />
-              </label>
+              <>
+                <label className="relative block">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/55">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+                      <path
+                        d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d="M19.5 21c0-2.5-3.5-4-7.5-4s-7.5 1.5-7.5 4"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </span>
+                  <input
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    placeholder="Full Name"
+                    type="text"
+                    autoComplete="name"
+                    className="h-11 w-full rounded-2xl border border-white/20 bg-white/10 pl-10 pr-4 text-sm text-white/90 shadow-[0_8px_22px_rgba(0,0,0,0.25)] outline-none transition placeholder:text-white/45 focus:border-white/35 focus:bg-white/15"
+                  />
+                </label>
+                <label className="relative block">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/55">
+                    <PhoneIcon />
+                  </span>
+                  <input
+                    value={mobile}
+                    onChange={(event) => setMobile(event.target.value)}
+                    placeholder="Mobile"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    className="h-11 w-full rounded-2xl border border-white/20 bg-white/10 pl-10 pr-4 text-sm text-white/90 shadow-[0_8px_22px_rgba(0,0,0,0.25)] outline-none transition placeholder:text-white/45 focus:border-white/35 focus:bg-white/15"
+                  />
+                </label>
+              </>
             ) : null}
 
             <label className="relative block">

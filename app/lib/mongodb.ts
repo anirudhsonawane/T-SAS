@@ -28,12 +28,15 @@ function getMongoClientPromise() {
     throw new Error("Missing MONGODB_URI env var.");
   }
 
+  console.log("[MongoDB] Connecting to MongoDB...");
   const client = new MongoClient(uri);
   const promise = client.connect().catch((err: unknown) => {
     if (global.__mongoClientPromise === promise) {
       global.__mongoClientPromise = undefined;
     }
-    throw new Error(formatMongoConnectionError(err));
+    const formattedError = formatMongoConnectionError(err);
+    console.error("[MongoDB] Connection failed:", formattedError);
+    throw new Error(formattedError);
   });
 
   global.__mongoClientPromise = promise;
@@ -43,5 +46,7 @@ function getMongoClientPromise() {
 export async function getDb() {
   const connectedClient = await getMongoClientPromise();
   const dbName = process.env.MONGODB_DB?.trim() || "ticket-r";
-  return connectedClient.db(dbName);
+  const db = connectedClient.db(dbName);
+  console.log("[MongoDB] Connected to database:", dbName);
+  return db;
 }

@@ -23,7 +23,7 @@ async function syncOauthUser(payload: OauthSyncPayload) {
     const db = await getDb();
     const users = db.collection("users");
 
-    await users.updateOne(
+    const result = await users.updateOne(
       { email: payload.email },
       {
         $set: {
@@ -42,8 +42,25 @@ async function syncOauthUser(payload: OauthSyncPayload) {
       },
       { upsert: true },
     );
-  } catch {
-    // If Mongo is down, still allow OAuth sign-in.
+
+    console.log("[OAuth Sync] User synced successfully", {
+      email: payload.email,
+      provider: payload.provider,
+      matched: result.matchedCount,
+      modified: result.modifiedCount,
+      upserted: result.upsertedCount,
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    const errorStack = err instanceof Error ? err.stack : "";
+    console.error("[OAuth Sync] Failed to sync OAuth user:", {
+      email: payload.email,
+      provider: payload.provider,
+      message,
+      errorStack,
+      error: err,
+    });
+    // Still allow OAuth sign-in even if database sync fails
   }
 }
 
@@ -63,7 +80,10 @@ providers.push(
     async authorize(credentials) {
       const email = credentials?.email?.trim().toLowerCase() ?? "";
       const password = credentials?.password ?? "";
-      if (!email || !password) return null;
+      if (!email || !password) {
+        console.warn("[Auth] Missing email or password in credentials");
+        return null;
+      }
 
       try {
         const db = await getDb();
@@ -75,17 +95,26 @@ providers.push(
           passwordHash?: string | null;
         }>({ email });
 
-        if (!user?.passwordHash) return null;
+        if (!user?.passwordHash) {
+          console.warn("[Auth] User not found or no password hash", { email });
+          return null;
+        }
         const ok = await bcrypt.compare(password, user.passwordHash);
-        if (!ok) return null;
+        if (!ok) {
+          console.warn("[Auth] Password mismatch", { email });
+          return null;
+        }
 
+        console.log("[Auth] User authenticated successfully", { email, userId: user._id.toString() });
         return {
           id: user._id.toString(),
           email: user.email,
           name: user.name ?? null,
           image: user.image ?? null,
         };
-      } catch {
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : "Unknown error";
+        console.error("[Auth] Error during credentials authorization:", { email, message, error: err });
         return null;
       }
     },
