@@ -155,57 +155,7 @@ async function createTicketPdfBuffer(payload: TicketEmailPayload) {
       const candidate = current ? `${current} ${word}` : word;
       if (font.widthOfTextAtSize(candidate, size) <= maxWidth) {
         current = candidate;
-        continue;
-      }
-
-      if (current) lines.push(current);
-      current = word;
-      if (lines.length >= maxLines - 1) break;
-    }
-    if (lines.length < maxLines && current) lines.push(current);
-
-    const usedWords = lines.join(" ").split(" ").filter(Boolean).length;
-    const hasOverflow = usedWords < words.length;
-    if (hasOverflow && lines.length) {
-      const lastIndex = lines.length - 1;
-      let clipped = lines[lastIndex];
-      while (clipped.length > 3 && font.widthOfTextAtSize(`${clipped}…`, size) > maxWidth) {
-        clipped = clipped.slice(0, -1);
-      }
-      lines[lastIndex] = `${clipped}…`;
-    }
-
-    return lines;
-  }
-
-  function drawDottedDivider(x: number, y: number, w: number) {
-    const dot = 2;
-    const gap = 6;
-    const count = Math.floor(w / (dot + gap));
-    for (let i = 0; i < count; i += 1) {
-      page.drawRectangle({
-        x: x + i * (dot + gap),
-        y,
-        width: dot,
-        height: 1,
-        color: slate200,
-        opacity: 1,
-      });
-    }
-  }
-
-  // No outer background, keep PDF white
-
-  // Ticket card (match TicketPassCard UI)
-  const cardW = 390;
-  const cardH = 760;
-  const cardX = Math.floor((width - cardW) / 2);
-  const cardY = Math.floor((height - cardH) / 2);
-
-  // No shadow for a clean card look
-  // Card
-  drawRoundedBorder({ x: cardX, y: cardY, w: cardW, h: cardH, r: 36, borderWidth: 1, border: rgb(0, 0, 0), fill: white, opacity: 0.06 });
-  drawRoundedRect({ x: cardX + 1, y: cardY + 1, w: cardW - 2, h: cardH - 2, r: 35, fill: white });
+        // Removed SHOW TICKET [QR CODE LOGO] CODE bar
 
   const pad = 18;
   const innerX = cardX + pad;
