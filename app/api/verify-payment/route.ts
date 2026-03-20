@@ -315,96 +315,93 @@ export async function POST(request: NextRequest) {
       // Ignore logging errors.
     }
 
-    fireAndForget(
-      (async () => {
-        let emailStatus: "sent" | "skipped" | "failed" = "skipped";
-        let emailReason: string | null = null;
-        let emailMessageId: string | null = null;
+    // Synchronously send the ticket email and update DB before responding
+    let emailStatus: "sent" | "skipped" | "failed" = "skipped";
+    let emailReason: string | null = null;
+    let emailMessageId: string | null = null;
 
-        console.log("[PaymentVerify] Starting new ticket email sending", {
+    console.log("[PaymentVerify] Starting new ticket email sending", {
+      ticketId,
+      email: emailTo,
+      deliveryId,
+    });
+
+    try {
+      const result = await sendTicketEmailWithRetry({
+        to: emailTo,
+        ticketId,
+        name: ticketRecord.attendeeName,
+        eventName,
+        eventDate,
+        eventTime,
+        venue: eventLocation,
+        ticketType,
+        seat: null,
+        quantity,
+        amount,
+        purchaseDate: ticketRecord.purchaseDate,
+        qrCodeDataUrl: qrCodeData,
+      });
+
+      if (result.ok) {
+        emailStatus = "sent";
+        emailMessageId = result.messageId ?? null;
+        console.log("[PaymentVerify] New ticket email sent successfully", {
           ticketId,
           email: emailTo,
-          deliveryId,
-        });
-
-        try {
-          const result = await sendTicketEmailWithRetry({
-            to: emailTo,
-            ticketId,
-            name: ticketRecord.attendeeName,
-            eventName,
-            eventDate,
-            eventTime,
-            venue: eventLocation,
-            ticketType,
-            seat: null,
-            quantity,
-            amount,
-            purchaseDate: ticketRecord.purchaseDate,
-            qrCodeDataUrl: qrCodeData,
-          });
-
-          if (result.ok) {
-            emailStatus = "sent";
-            emailMessageId = result.messageId ?? null;
-            console.log("[PaymentVerify] New ticket email sent successfully", {
-              ticketId,
-              email: emailTo,
-              messageId: emailMessageId,
-            });
-          } else {
-            emailStatus = "skipped";
-            emailReason = "reason" in result ? String(result.reason) : "SMTP not configured";
-            console.warn("[PaymentVerify] New ticket email was skipped", {
-              ticketId,
-              email: emailTo,
-              reason: emailReason,
-            });
-          }
-        } catch (error) {
-          emailStatus = "failed";
-          emailReason = error instanceof Error ? error.message : "Unknown email error";
-          console.error("[PaymentVerify] New ticket email sending failed", {
-            ticketId,
-            email: emailTo,
-            error: emailReason,
-            errorStack: error instanceof Error ? error.stack : undefined,
-          });
-        }
-
-        console.log("[PaymentVerify] New ticket email completed", {
-          ticketId,
-          status: emailStatus,
-          reason: emailReason,
           messageId: emailMessageId,
         });
+      } else {
+        emailStatus = "skipped";
+        emailReason = "reason" in result ? String(result.reason) : "SMTP not configured";
+        console.warn("[PaymentVerify] New ticket email was skipped", {
+          ticketId,
+          email: emailTo,
+          reason: emailReason,
+        });
+      }
+    } catch (error) {
+      emailStatus = "failed";
+      emailReason = error instanceof Error ? error.message : "Unknown email error";
+      console.error("[PaymentVerify] New ticket email sending failed", {
+        ticketId,
+        email: emailTo,
+        error: emailReason,
+        errorStack: error instanceof Error ? error.stack : undefined,
+      });
+    }
 
-        try {
-          await db.collection("email_deliveries").updateOne(
-            { deliveryId },
-            {
-              $set: {
-                status: emailStatus,
-                sent: emailStatus === "sent",
-                reason: emailReason,
-                messageId: emailMessageId,
-                updatedAt: new Date().toISOString(),
-              },
-            },
-          );
-        } catch (err: unknown) {
-          console.error("[PaymentVerify] Failed to update email_deliveries for new ticket", {
-            ticketId,
-            deliveryId,
-            error: err,
-          });
-        }
-      })(),
-    );
+    console.log("[PaymentVerify] New ticket email completed", {
+      ticketId,
+      status: emailStatus,
+      reason: emailReason,
+      messageId: emailMessageId,
+    });
+
+    try {
+      await db.collection("email_deliveries").updateOne(
+        { deliveryId },
+        {
+          $set: {
+            status: emailStatus,
+            sent: emailStatus === "sent",
+            reason: emailReason,
+            messageId: emailMessageId,
+            updatedAt: new Date().toISOString(),
+          },
+        },
+      );
+    } catch (err: unknown) {
+      console.error("[PaymentVerify] Failed to update email_deliveries for new ticket", {
+        ticketId,
+        deliveryId,
+        error: err,
+      });
+    }
 
     return NextResponse.json({
       ticket: ticketWithQr,
-      emailDelivery: { status: "skipped" as const, reason: "queued" as const },
+      emailDelivery: { status: emailStatus, reason: emailReason },
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to save ticket";
