@@ -31,15 +31,28 @@ async function sendTicketEmailWithRetry(args: Parameters<typeof sendTicketEmail>
   const attempts = 3;
   let lastError: unknown = null;
 
+  console.log("[EmailRetry] Starting email send with retry logic", { to: args.to, ticketId: args.ticketId, maxAttempts: attempts });
+
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
-      return await sendTicketEmail(args);
+      console.log(`[EmailRetry] Attempt ${attempt}/${attempts}`, { to: args.to, ticketId: args.ticketId });
+      const result = await sendTicketEmail(args);
+      console.log(`[EmailRetry] Attempt ${attempt} succeeded`, { to: args.to, ticketId: args.ticketId, result });
+      return result;
     } catch (error) {
       lastError = error;
-      if (attempt < attempts) await sleep(400 * attempt * attempt);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      console.warn(`[EmailRetry] Attempt ${attempt} failed`, { to: args.to, ticketId: args.ticketId, message, attempt });
+      if (attempt < attempts) {
+        const delayMs = 400 * attempt * attempt;
+        console.log(`[EmailRetry] Waiting ${delayMs}ms before retry...`);
+        await sleep(delayMs);
+      }
     }
   }
 
+  const message = lastError instanceof Error ? lastError.message : "Unknown error";
+  console.error("[EmailRetry] All attempts failed", { to: args.to, ticketId: args.ticketId, lastError: message, attempts });
   throw lastError instanceof Error ? lastError : new Error("Unable to send email");
 }
 
@@ -163,6 +176,13 @@ export async function POST(request: NextRequest) {
             let emailStatus: "sent" | "skipped" | "failed" = "skipped";
             let emailReason: string | null = null;
             let emailMessageId: string | null = null;
+            
+            console.log("[PaymentVerify] Starting ticket email sending process", {
+              ticketId: knownTicketId,
+              email: emailTo,
+              deliveryId,
+            });
+
             try {
               const result = await sendTicketEmailWithRetry({
                 to: emailTo,
@@ -183,18 +203,37 @@ export async function POST(request: NextRequest) {
               if (result.ok) {
                 emailStatus = "sent";
                 emailMessageId = result.messageId ?? null;
+                console.log("[PaymentVerify] Ticket email sent successfully", {
+                  ticketId: knownTicketId,
+                  email: emailTo,
+                  messageId: emailMessageId,
+                });
               } else {
                 emailStatus = "skipped";
-                emailReason = "reason" in result ? result.reason : null;
+                emailReason = "reason" in result ? String(result.reason) : "SMTP not configured";
+                console.warn("[PaymentVerify] Ticket email was skipped", {
+                  ticketId: knownTicketId,
+                  email: emailTo,
+                  reason: emailReason,
+                });
               }
             } catch (error) {
               emailStatus = "failed";
               emailReason = error instanceof Error ? error.message : "Unknown email error";
+              console.error("[PaymentVerify] Ticket email sending failed", {
+                ticketId: knownTicketId,
+                email: emailTo,
+                error: emailReason,
+                errorStack: error instanceof Error ? error.stack : undefined,
+              });
             }
 
-            if (emailStatus !== "sent") {
-              console.warn("Ticket email not sent", { ticketId: knownTicketId, status: emailStatus, reason: emailReason });
-            }
+            console.log("[PaymentVerify] Email sending completed", {
+              ticketId: knownTicketId,
+              status: emailStatus,
+              reason: emailReason,
+              messageId: emailMessageId,
+            });
 
             try {
               await db.collection("email_deliveries").updateOne(
@@ -209,8 +248,12 @@ export async function POST(request: NextRequest) {
                   },
                 },
               );
-            } catch {
-              // Ignore logging errors.
+            } catch (err: unknown) {
+              console.error("[PaymentVerify] Failed to update email_deliveries", {
+                ticketId: knownTicketId,
+                deliveryId,
+                error: err,
+              });
             }
           })(),
         );
@@ -278,6 +321,12 @@ export async function POST(request: NextRequest) {
         let emailReason: string | null = null;
         let emailMessageId: string | null = null;
 
+        console.log("[PaymentVerify] Starting new ticket email sending", {
+          ticketId,
+          email: emailTo,
+          deliveryId,
+        });
+
         try {
           const result = await sendTicketEmailWithRetry({
             to: emailTo,
@@ -298,18 +347,37 @@ export async function POST(request: NextRequest) {
           if (result.ok) {
             emailStatus = "sent";
             emailMessageId = result.messageId ?? null;
+            console.log("[PaymentVerify] New ticket email sent successfully", {
+              ticketId,
+              email: emailTo,
+              messageId: emailMessageId,
+            });
           } else {
             emailStatus = "skipped";
-            emailReason = "reason" in result ? result.reason : null;
+            emailReason = "reason" in result ? String(result.reason) : "SMTP not configured";
+            console.warn("[PaymentVerify] New ticket email was skipped", {
+              ticketId,
+              email: emailTo,
+              reason: emailReason,
+            });
           }
         } catch (error) {
           emailStatus = "failed";
           emailReason = error instanceof Error ? error.message : "Unknown email error";
+          console.error("[PaymentVerify] New ticket email sending failed", {
+            ticketId,
+            email: emailTo,
+            error: emailReason,
+            errorStack: error instanceof Error ? error.stack : undefined,
+          });
         }
 
-        if (emailStatus !== "sent") {
-          console.warn("Ticket email not sent", { ticketId, status: emailStatus, reason: emailReason });
-        }
+        console.log("[PaymentVerify] New ticket email completed", {
+          ticketId,
+          status: emailStatus,
+          reason: emailReason,
+          messageId: emailMessageId,
+        });
 
         try {
           await db.collection("email_deliveries").updateOne(
@@ -324,8 +392,12 @@ export async function POST(request: NextRequest) {
               },
             },
           );
-        } catch {
-          // Ignore logging errors.
+        } catch (err: unknown) {
+          console.error("[PaymentVerify] Failed to update email_deliveries for new ticket", {
+            ticketId,
+            deliveryId,
+            error: err,
+          });
         }
       })(),
     );

@@ -42,7 +42,31 @@ function getSmtpConfig() {
   const port = portRaw ? Number(portRaw) : 587;
   const secure = secureRaw ? secureRaw === "true" : port === 465;
 
-  if (!host || !user || !pass || !from || !port || Number.isNaN(port)) return null;
+  const missing = [
+    !host && "SMTP_HOST",
+    !user && "SMTP_USER",
+    !pass && "SMTP_PASS",
+    !from && "SMTP_FROM",
+    !port && "SMTP_PORT",
+  ].filter(Boolean);
+
+  if (missing.length > 0) {
+    console.error("[SMTP] Missing required configuration:", { missing });
+    return null;
+  }
+
+  if (Number.isNaN(port)) {
+    console.error("[SMTP] Invalid SMTP_PORT:", portRaw);
+    return null;
+  }
+
+  console.log("[SMTP] Configuration loaded successfully", {
+    host,
+    port,
+    user,
+    secure,
+    from,
+  });
 
   return { host, port, user, pass, from, secure };
 }
@@ -357,24 +381,147 @@ async function createTicketPdfBuffer(payload: TicketEmailPayload) {
 }
 
 export async function sendTicketEmail(payload: TicketEmailPayload) {
+  console.log("[TicketEmail] Starting email send process", { to: payload.to, ticketId: payload.ticketId });
+
   const smtp = getSmtpConfig();
-  if (!smtp) return { ok: false as const, skipped: true as const, reason: "SMTP not configured" };
+  if (!smtp) {
+    const reason = "SMTP not configured - missing environment variables";
+    console.warn("[TicketEmail] SMTP configuration missing:", { to: payload.to, reason });
+    return { ok: false as const, skipped: true as const, reason };
+  }
 
-  const transporter = nodemailer.createTransport({
-    host: smtp.host,
-    port: smtp.port,
-    secure: smtp.secure,
-    auth: { user: smtp.user, pass: smtp.pass },
-  });
+  try {
+    const transporter = nodemailer.createTransport({
+      host: smtp.host,
+      port: smtp.port,
+      secure: smtp.secure,
+      auth: { user: smtp.user, pass: smtp.pass },
+    });
 
-  const appUrl = getAppUrl();
-  const ticketUrl = appUrl ? `${appUrl}/ticket-wallet?ticketId=${encodeURIComponent(payload.ticketId)}` : "";
-  const subject = "You’re In! Here’s Your Ticket 🎫";
-  const displayName = (payload.name?.trim() || "there").replaceAll(/\s+/g, " ");
-  const displayEventDate = payload.eventDate?.trim() || "TBA";
-  const displayEventTime = payload.eventTime?.trim() || "TBA";
-  const displayVenue = payload.venue?.trim() || "TBA";
-  const displaySeat = payload.seat?.trim() || "";
+    console.log("[TicketEmail] Nodemailer transporter created", { host: smtp.host, port: smtp.port });
+
+    const appUrl = getAppUrl();
+    const ticketUrl = appUrl ? `${appUrl}/ticket-wallet?ticketId=${encodeURIComponent(payload.ticketId)}` : "";
+    const subject = "You're In! Here's Your Ticket 🎫";
+    const displayName = (payload.name?.trim() || "there").replaceAll(/\s+/g, " ");
+    const displayEventDate = payload.eventDate?.trim() || "TBA";
+    const displayEventTime = payload.eventTime?.trim() || "TBA";
+    const displayVenue = payload.venue?.trim() || "TBA";
+    const displaySeat = payload.seat?.trim() || "";
+
+    const textLines = [
+      `Ticket Confirmation`,
+      ``,
+      `Hello ${displayName},`,
+      ``,
+      `Event: ${payload.eventName}`,
+      `Date: ${displayEventDate}`,
+      `Time: ${displayEventTime}`,
+      `Venue: ${displayVenue}`,
+      `Ticket Type: ${payload.ticketType}`,
+      ...(displaySeat ? [`Seat: ${displaySeat}`] : []),
+      `Ticket ID: ${payload.ticketId}`,
+      ticketUrl ? `` : ``,
+      ticketUrl ? `View your ticket: ${ticketUrl}` : ``,
+    ].filter(Boolean);
+
+    console.log("[TicketEmail] Creating PDF buffer", { ticketId: payload.ticketId });
+    const pdfBuffer = await createTicketPdfBuffer(payload);
+    console.log("[TicketEmail] PDF created successfully", { ticketId: payload.ticketId, sizeBytes: pdfBuffer.length });
+
+    const qrPng = payload.qrCodeDataUrl ? parseDataUrlPng(payload.qrCodeDataUrl) : null;
+    const qrSrc = payload.qrCodeDataUrl?.trim() || "";
+
+    const html = `
+      <div style="font-family:Arial, sans-serif; max-width:600px; margin:auto; padding:20px; background:#f5f6f8; border-radius:10px">
+        <h2 style="color:#111">🎟 Ticket Confirmation</h2>
+
+        <p>Hello <b>${escapeHtml(displayName)}</b>,</p>
+
+        <p>Your ticket purchase was successful. We're excited to see you at the event!</p>
+
+        <hr style="border:none; border-top:1px solid #ddd">
+
+        <h3 style="margin-bottom:5px">${escapeHtml(payload.eventName)}</h3>
+
+        <p>
+          📅 <b>Date:</b> ${escapeHtml(displayEventDate)} <br>
+          ⏰ <b>Time:</b> ${escapeHtml(displayEventTime)} <br>
+          📍 <b>Venue:</b> ${escapeHtml(displayVenue)}
+        </p>
+
+        <p>
+          🎫 <b>Ticket Type:</b> ${escapeHtml(payload.ticketType)} <br>
+          ${displaySeat ? `💺 <b>Seat:</b> ${escapeHtml(displaySeat)}` : ""}
+        </p>
+
+        <div style="text-align:center; margin:20px 0">
+          <p><b>Your QR Ticket</b></p>
+          ${
+            qrSrc
+              ? `<img src="${qrSrc}" width="160" alt="Ticket QR Code" />`
+              : `<p style="font-size:14px; color:#666">QR code is attached as a PDF ticket.</p>`
+          }
+        </div>
+
+        <p>Please present this QR code at the venue entrance for quick check-in.</p>
+
+        <hr style="border:none; border-top:1px solid #ddd">
+
+        <p style="font-size:14px; color:#666">
+          If you have any questions, feel free to contact our support team.
+        </p>
+
+        <p style="font-size:14px; color:#999">
+          See you there! 🎶 <br>
+          Team Ticket-r
+        </p>
+
+        ${
+          ticketUrl
+            ? `<p style="margin-top:18px"><a href="${ticketUrl}" style="display:inline-block;background:#111;color:#fff;padding:10px 14px;border-radius:999px;text-decoration:none;font-weight:700;font-size:12px;letter-spacing:.12em;text-transform:uppercase">View Ticket</a></p>`
+            : ""
+        }
+      </div>
+    `;
+
+    console.log("[TicketEmail] Sending email via SMTP", { to: payload.to, ticketId: payload.ticketId, subject });
+    const info = await transporter.sendMail({
+      from: smtp.from,
+      to: payload.to,
+      subject,
+      text: textLines.join("\n"),
+      html,
+      attachments: [
+        {
+          filename: `ticket-${payload.ticketId}.pdf`,
+          content: pdfBuffer,
+          contentType: "application/pdf",
+        },
+      ],
+    });
+
+    console.log("[TicketEmail] Email sent successfully", {
+      to: payload.to,
+      ticketId: payload.ticketId,
+      messageId: info.messageId,
+      response: info.response,
+    });
+
+    return { ok: true as const, messageId: typeof info?.messageId === "string" ? info.messageId : undefined };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    const errorStack = err instanceof Error ? err.stack : "";
+    console.error("[TicketEmail] Failed to send email", {
+      to: payload.to,
+      ticketId: payload.ticketId,
+      message,
+      errorStack: errorStack.split("\n").slice(0, 5).join("\n"),
+      error: err,
+    });
+    return { ok: false as const, reason: message };
+  }
+}
 
   const textLines = [
     `Ticket Confirmation`,
