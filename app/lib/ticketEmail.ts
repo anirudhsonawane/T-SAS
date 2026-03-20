@@ -396,6 +396,9 @@ export async function sendTicketEmail(payload: TicketEmailPayload) {
       port: smtp.port,
       secure: smtp.secure,
       auth: { user: smtp.user, pass: smtp.pass },
+      greetingTimeout: 30000, // 30 seconds
+      connectionTimeout: 30000, // 30 seconds
+      socketTimeout: 30000, // 30 seconds
     });
 
     console.log("[TicketEmail] Nodemailer transporter created", { host: smtp.host, port: smtp.port });
