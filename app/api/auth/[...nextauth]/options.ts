@@ -8,6 +8,7 @@ import GoogleProvider from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
 
 import { getDb } from "@/app/lib/mongodb";
+import { sendWelcomeEmail } from "@/app/lib/welcomeEmail";
 
 type OauthSyncPayload = {
   email: string;
@@ -18,54 +19,103 @@ type OauthSyncPayload = {
   timestamp: Date;
 };
 
-async function syncOauthUser(payload: OauthSyncPayload) {
-  try {
-    const db = await getDb();
-    const users = db.collection("users");
+async function syncOauthUser(payload: OauthSyncPayload): Promise<{ success: boolean; isNewUser: boolean; userId?: string }> {
+  const maxRetries = 3;
+  let lastError: unknown = null;
 
-    const result = await users.updateOne(
-      { email: payload.email },
-      {
-        $set: {
-          email: payload.email,
-          name: payload.name,
-          image: payload.image,
-          updatedAt: payload.timestamp,
-        },
-        $setOnInsert: { createdAt: payload.timestamp },
-        $addToSet: {
-          oauth: {
-            provider: payload.provider,
-            providerAccountId: payload.providerAccountId,
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const db = await getDb();
+      const users = db.collection("users");
+
+      // Find existing user first
+      const existingUser = await users.findOne<{ _id: { toString(): string } }>({ email: payload.email });
+      const isNewUser = !existingUser;
+
+      const result = await users.updateOne(
+        { email: payload.email },
+        {
+          $set: {
+            email: payload.email,
+            name: payload.name,
+            image: payload.image,
+            updatedAt: payload.timestamp,
+          },
+          $setOnInsert: { createdAt: payload.timestamp },
+          $addToSet: {
+            oauth: {
+              provider: payload.provider,
+              providerAccountId: payload.providerAccountId,
+            },
           },
         },
-      },
-      { upsert: true },
-    );
+        { upsert: true },
+      );
 
-    console.log("[OAuth Sync] User synced successfully", {
-      email: payload.email,
-      provider: payload.provider,
-      matched: result.matchedCount,
-      modified: result.modifiedCount,
-      upserted: result.upsertedCount,
-    });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    const errorStack = err instanceof Error ? err.stack : "";
-    console.error("[OAuth Sync] Failed to sync OAuth user:", {
-      email: payload.email,
-      provider: payload.provider,
-      message,
-      errorStack,
-      error: err,
-    });
-    // Still allow OAuth sign-in even if database sync fails
+      const userId = result.upsertedId?.toString() || existingUser?._id.toString();
+
+      console.log("[OAuth Sync] User synced successfully", {
+        email: payload.email,
+        provider: payload.provider,
+        isNewUser,
+        userId,
+        matched: result.matchedCount,
+        modified: result.modifiedCount,
+        upserted: result.upsertedCount,
+        attempt,
+      });
+
+      // Send welcome email only to new users
+      if (isNewUser && userId) {
+        try {
+          void sendWelcomeEmail({
+            to: payload.email,
+            name: payload.name,
+            loginMethod: payload.provider as "google" | "apple" | "facebook" | "github",
+          });
+        } catch (emailErr: unknown) {
+          console.warn("[OAuth Sync] Failed to send welcome email (non-blocking):", {
+            email: payload.email,
+            error: emailErr,
+          });
+        }
+      }
+
+      return { success: true, isNewUser, userId };
+    } catch (err: unknown) {
+      lastError = err;
+      const message = err instanceof Error ? err.message : "Unknown error";
+      console.warn(`[OAuth Sync] Attempt ${attempt}/${maxRetries} failed for ${payload.email}:`, message);
+
+      // Wait before retry (exponential backoff)
+      if (attempt < maxRetries) {
+        await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+      }
+    }
   }
+
+  // All retries exhausted
+  const message = lastError instanceof Error ? lastError.message : "Unknown error";
+  const errorStack = lastError instanceof Error ? lastError.stack : "";
+  console.error("[OAuth Sync] Failed to sync OAuth user after all retries:", {
+    email: payload.email,
+    provider: payload.provider,
+    message,
+    errorStack,
+    error: lastError,
+  });
+
+  // Don't block sign-in even if database sync fails
+  return { success: false, isNewUser: false };
 }
 
-function queueOauthUserSync(payload: OauthSyncPayload) {
-  void syncOauthUser(payload);
+// Wrapper for backwards compatibility
+async function syncOauthUserWithRetry(payload: OauthSyncPayload): Promise<void> {
+  try {
+    await syncOauthUser(payload);
+  } catch (err: unknown) {
+    console.error("[OAuth Sync] Unexpected error in wrapper:", err);
+  }
 }
 
 const providers: NextAuthOptions["providers"] = [];
@@ -177,7 +227,9 @@ export const authOptions: NextAuthOptions = {
           providerAccountId: account.providerAccountId,
           timestamp: new Date(),
         };
-        void queueOauthUserSync(payload);
+        // Sync OAuth user with retry logic (with welcome email)
+        // Run in background but don't block sign-in
+        void syncOauthUserWithRetry(payload);
       }
 
       return true;

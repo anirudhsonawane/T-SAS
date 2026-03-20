@@ -10,6 +10,17 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: projectRoot,
   },
+  webpack: (config, { isServer }) => {
+    // Suppress DEP0169 deprecation warning from url.parse() in dependencies
+    if (!isServer) {
+      config.ignoreWarnings = config.ignoreWarnings || [];
+      config.ignoreWarnings.push({
+        module: /node_modules/,
+        message: /DEP0169/,
+      });
+    }
+    return config;
+  },
 };
 
 export default nextConfig;

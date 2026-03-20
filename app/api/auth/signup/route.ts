@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import { NextResponse } from "next/server";
 
 import { getDb } from "@/app/lib/mongodb";
+import { sendWelcomeEmail } from "@/app/lib/welcomeEmail";
 
 function isEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
@@ -71,6 +72,21 @@ export async function POST(req: Request) {
     }
 
     console.log("[Signup] User created successfully", { email, userId: insertResult.insertedId });
+
+    // Send welcome email in background (non-blocking)
+    try {
+      void sendWelcomeEmail({
+        to: email,
+        name: name || null,
+        loginMethod: "email",
+      });
+    } catch (emailErr: unknown) {
+      console.warn("[Signup] Failed to send welcome email (non-blocking):", {
+        email,
+        error: emailErr,
+      });
+    }
+
     return NextResponse.json({ ok: true }, { status: 201 });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Signup failed.";
