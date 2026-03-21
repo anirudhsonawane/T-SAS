@@ -29,7 +29,7 @@ export function EventDetailsCard({
       initial={{ opacity: 0, x: 35 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.9, delay: 0.6 }}
-      className="order-3 mx-auto w-full max-w-[360px] rounded-3xl border border-white/30 bg-black/30 p-6 backdrop-blur-md md:mx-0 md:justify-self-end lg:mx-0 lg:max-w-[280px] lg:justify-self-end"
+      className="order-3 mx-auto w-full max-w-90 rounded-3xl border border-white/30 bg-black/30 p-6 backdrop-blur-md md:mx-0 md:justify-self-end lg:mx-0 lg:max-w-70 lg:justify-self-end"
     >
       <p className="mb-4 text-xs uppercase tracking-[0.24em] text-white/70">{title}</p>
       <div className="space-y-4">

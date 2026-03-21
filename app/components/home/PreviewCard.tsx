@@ -18,7 +18,7 @@ export function PreviewCard({
       initial={{ opacity: 0, x: -35 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.9, delay: 0.45 }}
-      className="order-2 mx-auto w-full max-w-[340px] md:mx-0 lg:order-1 lg:self-start lg:pt-16"
+      className="order-2 mx-auto w-full max-w-85 md:mx-0 lg:order-1 lg:self-start lg:pt-16"
     >
       <div className="relative overflow-hidden rounded-2xl border border-white/35 bg-black/25 shadow-[0_15px_45px_rgba(0,0,0,0.45)] backdrop-blur-sm">
         <div className="aspect-video w-full bg-cover bg-center" style={{ backgroundImage: `url('${imageUrl}')` }} />

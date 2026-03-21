@@ -165,7 +165,7 @@ export function AboutSection() {
             transition={{ type: "spring", stiffness: 240, damping: 18 }}
             className="group relative overflow-hidden rounded-3xl border border-white/15 bg-white/10 backdrop-blur-xl shadow-[0_18px_80px_rgba(0,0,0,0.55)]"
           >
-            <div className="relative aspect-[16/11] w-full">
+            <div className="relative aspect-16/11 w-full">
               <img
                 src="/bg-image.png"
                 alt="Cinematic concert preview"

@@ -236,7 +236,6 @@ export const authOptions: NextAuthOptions = {
     },
     async session({ session, token }) {
       if (session.user && token.sub) {
-        // @ts-expect-error next-auth default Session type doesn't include id
         session.user.id = token.sub;
       }
       return session;

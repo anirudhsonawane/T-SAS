@@ -53,7 +53,7 @@ export default function SitePreloader() {
           initial={{ opacity: 1 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0, transition: { duration: 0.45, ease: [0.22, 1, 0.36, 1] } }}
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-white"
+          className="fixed inset-0 z-9999 flex items-center justify-center bg-white"
         >
           <div className="flex flex-col items-center gap-5 px-5 text-center">
             <motion.div

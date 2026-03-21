@@ -144,7 +144,7 @@ function OrbitMark(props: ComponentProps<"svg">) {
 
 function PartnerCell({ partner }: { partner: Partner }) {
   return (
-    <div className="group relative flex items-center justify-center px-6 py-7 transition duration-200 ease-out hover:z-10 hover:scale-[1.015] hover:bg-white/[0.03]">
+    <div className="group relative flex items-center justify-center px-6 py-7 transition duration-200 ease-out hover:z-10 hover:scale-[1.015] hover:bg-white/3">
       <div className="flex items-center justify-center transition duration-200 ease-out group-hover:scale-105">
         <span className="sr-only">{partner.name}</span>
         {partner.logo}
@@ -218,9 +218,9 @@ export function PartnersSection() {
           Our Partners in <span className="text-[#FF3B3B]">Music Experiences</span>
         </h2>
 
-        <div className="mt-12 rounded-2xl border border-[#1A1A1A] bg-white/[0.02] shadow-[0_0_0_1px_rgba(255,255,255,0.02)_inset]">
+        <div className="mt-12 rounded-2xl border border-[#1A1A1A] bg-white/2 shadow-[0_0_0_1px_rgba(255,255,255,0.02)_inset]">
           <div className="rounded-2xl bg-[#1A1A1A] p-px">
-            <div className="grid grid-cols-1 gap-px overflow-hidden rounded-[calc(theme(borderRadius.2xl)-1px)] bg-[#1A1A1A] min-[420px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+            <div className="grid grid-cols-1 gap-px overflow-hidden rounded-[calc(var(--radius-2xl)-1px)] bg-[#1A1A1A] min-[420px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
               {partners.map((partner) => (
                 <div key={partner.name} className="bg-[#0B0B0B]">
                   <PartnerCell partner={partner} />
