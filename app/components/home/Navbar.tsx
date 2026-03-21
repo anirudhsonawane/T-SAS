@@ -96,7 +96,7 @@ function MobileSignupButton({ href, onClick }: { href: string; onClick?: () => v
 export function Navbar({
   links,
   unauthenticatedLinks,
-  brand = "QUICKETS",
+  brand = "SHUB > INNOVATION",
 }: {
   links: NavLink[];
   unauthenticatedLinks?: NavLink[];

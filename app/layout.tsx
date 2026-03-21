@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export const metadata: Metadata = {
-  title: "QUICKETS | Event Ticket Marketplace",
+  title: "TICKETr | Event Ticket Marketplace",
   description: "Cinematic concert ticket marketplace landing page.",
   manifest: "/manifest.json",
 };

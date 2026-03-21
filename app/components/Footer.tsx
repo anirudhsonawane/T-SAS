@@ -41,7 +41,7 @@ export function Footer({ id = "contact" }: { id?: string }) {
           </div>
           <div className="flex items-center gap-2">
             <span className="h-1.5 w-1.5 rounded-full bg-[#FF3B3B]" aria-hidden />
-            <span>Partnerships: sponsors@quickets.com</span>
+            <span>Partnerships: sponsors@gmail.com</span>
           </div>
         </div>
       </div>

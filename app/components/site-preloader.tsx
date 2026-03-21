@@ -95,7 +95,7 @@ export default function SitePreloader() {
               </svg>
             </motion.div>
 
-            <p className="text-xs font-semibold uppercase tracking-[0.42em] text-[#201014]">QUICKETS</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.42em] text-[#201014]">TICKETr</p>
 
             <div className="flex items-center gap-2" aria-hidden>
               {[0, 1, 2].map((dot) => (

@@ -27,7 +27,7 @@ export function AuthShell({
         />
         <div aria-hidden className="absolute inset-0 bg-[rgba(0,0,0,0.42)]" />
 
-        <Navbar links={routeLinks} unauthenticatedLinks={authNavLinks} brand="QUICKETS" />
+        <Navbar links={routeLinks} unauthenticatedLinks={authNavLinks} brand="SHUB > INNOVATION" />
 
         <div className="relative z-10 mx-auto mt-10 flex w-full max-w-6xl justify-center lg:mt-16">
           <div className="w-full max-w-md">
